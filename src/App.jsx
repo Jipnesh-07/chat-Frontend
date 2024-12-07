@@ -143,35 +143,32 @@
 
 // export default App;
 
-
-import { Container, Typography, Button, TextField, Box, Stack } from '@mui/material';
-import axios from 'axios';
-import React, { useEffect, useMemo, useState } from 'react';
-import { io } from "socket.io-client";
+import { useMemo, useState, useEffect } from "react";
+import io from "socket.io-client";
+import { Container, Box, Typography, TextField, Button, Stack } from "@mui/material";
 
 const App = () => {
-  const socket = useMemo(() => io("http://localhost:5001", {
-    withCredentials: false,
-    reconnection: true,
-    reconnectionAttempts: 10,
-    reconnectionDelay: 1500,
-  }), []);
+  const socket = useMemo(
+    () =>
+      io("http://localhost:5001", {
+        withCredentials: false,
+        reconnection: true,
+        reconnectionAttempts: 10,
+        reconnectionDelay: 2000,
+      }),
+    []
+  );
 
   const [messages, setMessages] = useState([]);
   const [message, setMessage] = useState("");
-  const [room, setRoom] = useState("default-room"); // Default room for testing
-  const [socketID, setsocketID] = useState("");
+  const [room, setRoom] = useState("default-room"); // Default room
+  const [socketID, setSocketID] = useState("");
   const [roomName, setRoomName] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (message.trim()) {
       socket.emit("message", { message, room });
-      // try{
-      //   await axios.post('/chat/message' , {
-          
-      //   })
-      // }
       setMessage("");
     }
   };
@@ -180,15 +177,24 @@ const App = () => {
     e.preventDefault();
     if (roomName.trim()) {
       setRoom(roomName);
-      socket.emit('join-room', roomName);
+      socket.emit("join-room", roomName);
       setRoomName("");
     }
   };
 
   useEffect(() => {
     socket.on("connect", () => {
-      setsocketID(socket.id);
-      console.log("connected", socket.id);
+      console.log("Socket connected with ID:", socket.id);
+      setSocketID(socket.id);
+    });
+
+    socket.on("reconnect", (attemptNumber) => {
+      console.log(`Reconnected on attempt: ${attemptNumber}`);
+      setSocketID(socket.id);
+    });
+
+    socket.on("disconnect", () => {
+      console.log("Socket disconnected");
     });
 
     socket.on("connect_error", (error) => {
@@ -196,7 +202,13 @@ const App = () => {
     });
 
     socket.on("receive-message", (data) => {
-      setMessages((prevMessages) => [...prevMessages, data]);
+      setMessages((prevMessages) => [
+        ...prevMessages,
+        {
+          ...data,
+          timestamp: data.timestamp || Date.now(),
+        },
+      ]);
     });
 
     socket.on("welcome", (msg) => {
@@ -212,7 +224,7 @@ const App = () => {
     <Container maxWidth="sm">
       <Box sx={{ height: 20 }} />
       <Typography variant="h6" component="div" gutterBottom>
-        Socket ID: {socketID}
+        Socket ID: {socketID || "Connecting..."}
       </Typography>
 
       <form onSubmit={joinRoomHandler}>
@@ -248,7 +260,7 @@ const App = () => {
         {messages.map((m, i) => (
           <Box key={i} p={2} bgcolor="grey.200" borderRadius={2}>
             <Typography variant="subtitle1">
-              <strong>{m.sender || 'User'}:</strong> {m.message}
+              <strong>{m.sender || "User"}:</strong> {m.message}
             </Typography>
             <Typography variant="caption">
               {new Date(m.timestamp).toLocaleString()}
